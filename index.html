@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>增强版纯Web文本编辑器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .editor-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 900px;
+            min-height: 500px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+        }
+
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid rgba(102, 126, 234, 0.2);
+        }
+
+        .editor-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-info {
+            display: flex;
+            gap: 15px;
+            font-size: 14px;
+            color: #666;
+            flex-wrap: wrap;
+        }
+
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .status-item:hover {
+            background: rgba(102, 126, 234, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .auto-save-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(46, 204, 113, 0.9);
+            color: white;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-10px) scale(0.8);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 100;
+        }
+
+        .auto-save-indicator.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .auto-save-indicator.saving {
+            background: rgba(241, 196, 15, 0.9);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .editor-textarea {
+            width: 100%;
+            min-height: 400px;
+            padding: 20px;
+            border: none;
+            outline: none;
+            font-size: 16px;
+            line-height: 1.6;
+            color: #333;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 12px;
+            resize: vertical;
+            font-family: 'Consolas', 'Monaco', monospace;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .editor-textarea:focus {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .editor-textarea::selection {
+            background: rgba(255, 107, 107, 0.3);
+        }
+
+        /* 自定义滚动条样式 */
+        .editor-textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .editor-textarea::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 6px;
+        }
+
+        .editor-textarea::-webkit-scrollbar-thumb {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+
+        .editor-textarea::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(45deg, #5a67d8, #6b46c1);
+            transform: scale(1.1);
+        }
+
+        /* Firefox滚动条样式 */
+        .editor-textarea {
+            scrollbar-width: thin;
+            scrollbar-color: #667eea rgba(255, 255, 255, 0.3);
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 10px;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-btn {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 6px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .toolbar-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .toolbar-btn:active {
+            transform: translateY(0);
+        }
+
+        .toolbar-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .toolbar-btn:hover::before {
+            left: 100%;
+        }
+
+        .drag-delete-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(45deg, #ff6b6b, #ff5252);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 500;
+            opacity: 0;
+            transform: translateY(-20px) scale(0.8);
+            transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+            box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .drag-delete-indicator.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .drag-delete-indicator::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #ff6b6b, #ff5252, #ff6b6b);
+            border-radius: 22px;
+            z-index: -1;
+            animation: borderGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes borderGlow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .char-count {
+            text-align: right;
+            margin-top: 10px;
+            color: #666;
+            font-size: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .progress-bar {
+            width: 200px;
+            height: 4px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-left: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 2px;
+        }
+
+        /* 动画效果 */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .editor-container {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .paste-animation {
+            animation: pasteGlow 0.6s ease-out;
+        }
+
+        @keyframes pasteGlow {
+            0% {
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 30px rgba(102, 234, 126, 0.6);
+                transform: scale(1.005);
+            }
+            100% {
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+                transform: scale(1);
+            }
+        }
+
+        .undo-animation {
+            animation: undoSlide 0.4s ease-out;
+        }
+
+        @keyframes undoSlide {
+            0% {
+                transform: translateX(-10px);
+                opacity: 0.7;
+            }
+            50% {
+                transform: translateX(0);
+                opacity: 1;
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 20px rgba(255, 193, 7, 0.4);
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .redo-animation {
+            animation: redoSlide 0.4s ease-out;
+        }
+
+        @keyframes redoSlide {
+            0% {
+                transform: translateX(10px);
+                opacity: 0.7;
+            }
+            50% {
+                transform: translateX(0);
+                opacity: 1;
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 20px rgba(0, 123, 255, 0.4);
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .delete-animation {
+            animation: deleteShake 0.3s ease-out;
+        }
+
+        @keyframes deleteShake {
+            0%, 100% { transform: translateX(0); }
+            25% {
+                transform: translateX(-2px);
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 15px rgba(255, 107, 107, 0.3);
+            }
+            75% {
+                transform: translateX(2px);
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 15px rgba(255, 107, 107, 0.3);
+            }
+        }
+
+        .typing-animation {
+            animation: typingGlow 0.5s ease-out;
+        }
+
+        @keyframes typingGlow {
+            0% {
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+            50% {
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 15px rgba(102, 126, 234, 0.2);
+            }
+            100% {
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .clear-animation {
+            animation: clearSweep 0.5s ease-out;
+        }
+
+        @keyframes clearSweep {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(0.98);
+                opacity: 0.5;
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 20px rgba(255, 107, 107, 0.3);
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .save-animation {
+            animation: saveSuccess 0.4s ease-out;
+        }
+
+        @keyframes saveSuccess {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.02);
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 25px rgba(46, 204, 113, 0.4);
+            }
+            100% {
+                transform: scale(1);
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1);
+            }
+        }
+
+        .load-animation {
+            animation: loadFade 0.5s ease-out;
+        }
+
+        @keyframes loadFade {
+            0% {
+                opacity: 0.3;
+                transform: translateY(5px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-100px);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            border-radius: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            font-size: 14px;
+            font-weight: 500;
+            color: #333;
+            z-index: 1000;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .notification.show {
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .notification.success {
+            background: rgba(46, 204, 113, 0.9);
+            color: white;
+        }
+
+        .notification.warning {
+            background: rgba(241, 196, 15, 0.9);
+            color: white;
+        }
+
+        .notification.error {
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+        }
+
+        .word-count-milestone {
+            animation: milestone 0.6s ease-out;
+        }
+
+        @keyframes milestone {
+            0% {
+                background: rgba(255, 255, 255, 0.7);
+            }
+            50% {
+                background: rgba(255, 215, 0, 0.3);
+                box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.1), 0 0 30px rgba(255, 215, 0, 0.5);
+            }
+            100% {
+                background: rgba(255, 255, 255, 0.7);
+            }
+        }
+
+        .floating-particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+            border-radius: 20px;
+        }
+
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: rgba(102, 126, 234, 0.3);
+            border-radius: 50%;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(100px) rotate(0deg);
+                opacity: 0;
+            }
+            50% {
+                transform: translateY(-100px) rotate(180deg);
+                opacity: 1;
+            }
+        }
+
+        .session-info {
+            position: absolute;
+            bottom: 5px;
+            left: 10px;
+            font-size: 11px;
+            color: rgba(102, 126, 234, 0.7);
+            background: rgba(255, 255, 255, 0.8);
+            padding: 4px 8px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+        }
+
+        @media (max-width: 600px) {
+            .editor-container {
+                padding: 20px;
+                margin: 10px;
+            }
+            
+            .status-info {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .toolbar {
+                gap: 5px;
+            }
+            
+            .toolbar-btn {
+                padding: 6px 8px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <div class="floating-particles" id="particles"></div>
+        
+        <div class="auto-save-indicator" id="autoSaveIndicator">
+            💾 已自动保存
+        </div>
+
+        <div class="editor-header">
+            <h1 class="editor-title">
+                <span class="title-icon">📝</span>
+                增强版文本编辑器
+            </h1>
+            <div class="status-info">
+                <div class="status-item" title="粘贴统计">
+                    <span>📋</span>
+                    <span id="pasteCount">粘贴: 0</span>
+                </div>
+                <div class="status-item" title="删除统计">
+                    <span>🗑️</span>
+                    <span id="deleteCount">删除: 0</span>
+                </div>
+                <div class="status-item" title="会话时长">
+                    <span>⏱️</span>
+                    <span id="sessionTime">00:00</span>
+                </div>
+                <div class="status-item" title="最后保存时间">
+                    <span>💾</span>
+                    <span id="lastSaved">未保存</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="toolbar">
+            <button class="toolbar-btn" onclick="clearEditor()" title="清空编辑器">🗑️ 清空</button>
+            <button class="toolbar-btn" onclick="copyAll()" title="复制全部内容">📋 复制全部</button>
+            <button class="toolbar-btn" onclick="selectAll()" title="选择全部内容">🔄 全选</button>
+            <button class="toolbar-btn" onclick="undo()" title="撤销 (Ctrl+Z)">↶ 撤销</button>
+            <button class="toolbar-btn" onclick="redo()" title="重做 (Ctrl+Y)">↷ 恢复</button>
+            <button class="toolbar-btn" onclick="insertTimestamp()" title="插入当前时间">⏰ 插入时间</button>
+            <button class="toolbar-btn" onclick="saveManually()" title="手动保存">💾 保存</button>
+            <button class="toolbar-btn" onclick="loadFromCookie()" title="恢复上次内容">📂 恢复</button>
+            <button class="toolbar-btn" onclick="exportText()" title="导出文本">📤 导出</button>
+        </div>
+
+        <textarea 
+            class="editor-textarea" 
+            id="textEditor" 
+            placeholder="在此输入文本...
+
+✨ 增强功能：
+• 自动保存功能 - 每30秒自动保存一次
+• 智能恢复 - 刷新页面后自动恢复内容
+• 拖选删除 - 选中文本后自动删除
+• 撤销/重做 - 支持多步操作历史
+• 会话统计 - 实时显示编辑统计信息
+• 动画反馈 - 丰富的视觉反馈效果
+• 里程碑提醒 - 字数达到特定数量时提醒
+• 导出功能 - 支持文本文件导出
+
+开始编辑吧！您的内容将被自动保存 🚀"
+        ></textarea>
+
+        <div class="char-count">
+            <div>
+                字符数: <span id="charCount">0</span> | 
+                单词数: <span id="wordCount">0</span> | 
+                行数: <span id="lineCount">1</span>
+            </div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
+
+        <div class="session-info">
+            会话开始: <span id="sessionStart"></span>
+        </div>
+    </div>
+
+    <div class="drag-delete-indicator" id="dragIndicator">
+        🗑️ 拖选删除模式
+    </div>
+
+    <div class="notification" id="notification">
+        消息通知
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const textEditor = document.getElementById('textEditor');
+        const dragIndicator = document.getElementById('dragIndicator');
+        const pasteCount = document.getElementById('pasteCount');
+        const deleteCount = document.getElementById('deleteCount');
+        const charCount = document.getElementById('charCount');
+        const wordCount = document.getElementById('wordCount');
+        const lineCount = document.getElementById('lineCount');
+        const sessionTime = document.getElementById('sessionTime');
+        const lastSaved = document.getElementById('lastSaved');
+        const sessionStart = document.getElementById('sessionStart');
+        const autoSaveIndicator = document.getElementById('autoSaveIndicator');
+        const notification = document.getElementById('notification');
+        const progressFill = document.getElementById('progressFill');
+        const particles = document.getElementById('particles');
+
+        // 全局变量
+        let pasteCounter = 0;
+        let deleteCounter = 0;
+        let isDragging = false;
+        let dragStarted = false;
+        let sessionStartTime = new Date();
+        let autoSaveInterval;
+        let typingTimer;
+        let lastWordCount = 0;
+        
+        // 撤销/恢复功能
+        let undoStack = [];
+        let redoStack = [];
+        let currentState = '';
+        let isUndoRedo = false;
+
+        // Cookie 操作函数
+        function setCookie(name, value, days = 7) {
+            const expires = new Date();
+            expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+            document.cookie = `${name}=${encodeURIComponent(value)};expires=${expires.toUTCString()};path=/`;
+        }
+
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) == 0) return decodeURIComponent(c.substring(nameEQ.length, c.length));
+            }
+            return null;
+        }
+
+        function deleteCookie(name) {
+            document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        }
+
+        // 保存编辑器数据到Cookie
+        function saveToCookie() {
+            const editorData = {
+                content: textEditor.value,
+                pasteCount: pasteCounter,
+                deleteCount: deleteCounter,
+                lastSaved: new Date().toLocaleString('zh-CN'),
+                sessionStart: sessionStartTime.toLocaleString('zh-CN'),
+                cursorPosition: textEditor.selectionStart
+            };
+            setCookie('textEditorData', JSON.stringify(editorData));
+            
+            // 更新保存指示器
+            lastSaved.textContent = new Date().toLocaleString('zh-CN').substring(5);
+            showAutoSaveIndicator();
+            
+            // 添加保存动画
+            textEditor.classList.add('save-animation');
+            setTimeout(() => {
+                textEditor.classList.remove('save-animation');
+            }, 400);
+        }
+
+        // 从Cookie加载数据
+        function loadFromCookie() {
+            const savedData = getCookie('textEditorData');
+            if (savedData) {
+                try {
+                    const data = JSON.parse(savedData);
+                    textEditor.value = data.content || '';
+                    pasteCounter = data.pasteCount || 0;
+                    deleteCounter = data.deleteCount || 0;
+                    
+                    // 更新显示
+                    pasteCount.textContent = `粘贴: ${pasteCounter}`;
+                    deleteCount.textContent = `删除: ${deleteCounter}`;
+                    lastSaved.textContent = data.lastSaved ? data.lastSaved.substring(5) : '未保存';
+                    
+                    // 恢复光标位置
+                    if (data.cursorPosition !== undefined) {
+                        textEditor.setSelectionRange(data.cursorPosition, data.cursorPosition);
+                    }
+                    
+                    updateStats();
+                    saveState();
+                    
+                    // 添加加载动画
+                    textEditor.classList.add('load-animation');
+                    setTimeout(() => {
+                        textEditor.classList.remove('load-animation');
+                    }, 500);
+                    
+                    showNotification('✅ 已恢复上次编辑内容', 'success');
+                } catch (e) {
+                    showNotification('❌ 恢复数据时出错', 'error');
+                }
+            } else {
+                showNotification('ℹ️ 没有找到保存的数据', 'warning');
+            }
+        }
+
+        // 显示自动保存指示器
+        function showAutoSaveIndicator() {
+            autoSaveIndicator.classList.add('show');
+            setTimeout(() => {
+                autoSaveIndicator.classList.remove('show');
+            }, 2000);
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'info') {
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // 自动保存功能
+        function startAutoSave() {
+            autoSaveInterval = setInterval(() => {
+                if (textEditor.value.trim() !== '') {
+                    autoSaveIndicator.classList.add('saving');
+                    setTimeout(() => {
+                        saveToCache();
+                        autoSaveIndicator.classList.remove('saving');
+                    }, 500);
+                }
+            }, 30000); // 每30秒自动保存
+        }
+
+        // 更新会话时间
+        function updateSessionTime() {
+            const now = new Date();
+            const diff = now - sessionStartTime;
+            const minutes = Math.floor(diff / 60000);
+            const seconds = Math.floor((diff % 60000) / 1000);
+            sessionTime.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+
+        // 保存状态到撤销栈
+        function saveState() {
+            if (isUndoRedo) return;
+            
+            const newState = {
+                text: textEditor.value,
+                selectionStart: textEditor.selectionStart,
+                selectionEnd: textEditor.selectionEnd
+            };
+            
+            if (JSON.stringify(newState) !== JSON.stringify(currentState)) {
+                undoStack.push(currentState);
+                currentState = newState;
+                redoStack = [];
+                
+                if (undoStack.length > 100) {
+                    undoStack.shift();
+                }
+            }
+        }
+
+        // 撤销功能
+        function undo() {
+            if (undoStack.length === 0) return;
+            
+            isUndoRedo = true;
+            redoStack.push(currentState);
+            currentState = undoStack.pop();
+            
+            textEditor.value = currentState.text;
+            textEditor.setSelectionRange(currentState.selectionStart, currentState.selectionEnd);
+            textEditor.focus();
+            
+            updateStats();
+            isUndoRedo = false;
+            
+            // 撤销动画
+            textEditor.classList.add('undo-animation');
+            setTimeout(() => {
+                textEditor.classList.remove('undo-animation');
+            }, 400);
+        }
+
+        // 恢复功能
+        function redo() {
+            if (redoStack.length === 0) return;
+            
+            isUndoRedo = true;
+            undoStack.push(currentState);
+            currentState = redoStack.pop();
+            
+            textEditor.value = currentState.text;
+            textEditor.setSelectionRange(currentState.selectionStart, currentState.selectionEnd);
+            textEditor.focus();
+            
+            updateStats();
+            isUndoRedo = false;
+            
+            // 重做动画
+            textEditor.classList.add('redo-animation');
+            setTimeout(() => {
+                textEditor.classList.remove('redo-animation');
+            }, 400);
+        }
+
+        // 更新统计信息
+        function updateStats() {
+            const text = textEditor.value;
+            const chars = text.length;
+            const words = text.trim() === '' ? 0 : text.trim().split(/\s+/).length;
+            const lines = text.split('\n').length;
+            
+            charCount.textContent = chars;
+            wordCount.textContent = words;
+            lineCount.textContent = lines;
+            
+            // 更新进度条（以1000字符为目标）
+            const progress = Math.min((chars / 1000) * 100, 100);
+            progressFill.style.width = progress + '%';
+            
+            // 检查字数里程碑
+            checkWordMilestone(words);
+        }
+
+        // 检查字数里程碑
+        function checkWordMilestone(currentWords) {
+            const milestones = [100, 250, 500, 750, 1000, 1500, 2000, 3000, 5000];
+            
+            for (let milestone of milestones) {
+                if (lastWordCount < milestone && currentWords >= milestone) {
+                    showNotification(`🎉 恭喜！已达到 ${milestone} 字里程碑`, 'success');
+                    textEditor.classList.add('word-count-milestone');
+                    setTimeout(() => {
+                        textEditor.classList.remove('word-count-milestone');
+                    }, 600);
+                    createParticles();
+                    break;
+                }
+            }
+            lastWordCount = currentWords;
+        }
+
+        // 创建粒子效果
+        function createParticles() {
+            for (let i = 0; i < 10; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 2 + 's';
+                particle.style.animationDuration = (Math.random() * 2 + 3) + 's';
+                particles.appendChild(particle);
+                
+                setTimeout(() => {
+                    particle.remove();
+                }, 5000);
+            }
+        }
+
+        // 粘贴事件处理
+        textEditor.addEventListener('paste', function(e) {
+            saveState();
+            
+            pasteCounter++;
+            pasteCount.textContent = `粘贴: ${pasteCounter}`;
+            
+            // 粘贴动画效果
+            textEditor.classList.add('paste-animation');
+            setTimeout(() => {
+                textEditor.classList.remove('paste-animation');
+            }, 600);
+            
+            setTimeout(() => {
+                updateStats();
+                saveState();
+                saveToCookie();
+            }, 10);
+        });
+
+        // 鼠标事件处理
+        textEditor.addEventListener('mousedown', function(e) {
+            dragStarted = true;
+            isDragging = false;
+        });
+
+        textEditor.addEventListener('mousemove', function(e) {
+            if (dragStarted && !isDragging) {
+                isDragging = true;
+                dragIndicator.classList.add('show');
+            }
+        });
+
+        textEditor.addEventListener('mouseup', function(e) {
+            if (isDragging) {
+                const selectedText = window.getSelection().toString();
+                if (selectedText && selectedText.trim().length > 0) {
+                    saveState();
+                    
+                    const start = textEditor.selectionStart;
+                    const end = textEditor.selectionEnd;
+                    const text = textEditor.value;
+                    textEditor.value = text.substring(0, start) + text.substring(end);
+                    textEditor.setSelectionRange(start, start);
+                    
+                    deleteCounter++;
+                    deleteCount.textContent = `删除: ${deleteCounter}`;
+                    updateStats();
+                    saveState();
+                    saveToCookie();
+                    
+                    // 删除动画
+                    textEditor.classList.add('delete-animation');
+                    setTimeout(() => {
+                        textEditor.classList.remove('delete-animation');
+                    }, 300);
+                    
+                    textEditor.focus();
+                }
+                dragIndicator.classList.remove('show');
+            }
+            dragStarted = false;
+            isDragging = false;
+        });
+
+        textEditor.addEventListener('mouseleave', function(e) {
+            if (isDragging) {
+                dragIndicator.classList.remove('show');
+            }
+            dragStarted = false;
+            isDragging = false;
+        });
+
+        // 键盘输入事件
+        textEditor.addEventListener('input', function(e) {
+            updateStats();
+            saveState();
+            
+            // 清除之前的定时器
+            clearTimeout(typingTimer);
+            
+            // 添加打字动画
+            textEditor.classList.add('typing-animation');
+            
+            // 延迟保存和移除动画
+            typingTimer = setTimeout(() => {
+                saveToCookie();
+                textEditor.classList.remove('typing-animation');
+            }, 1000);
+        });
+
+        // 工具栏功能
+        function clearEditor() {
+            if (textEditor.value.trim() !== '') {
+                if (confirm('确定要清空编辑器内容吗？')) {
+                    saveState();
+                    textEditor.value = '';
+                    textEditor.focus();
+                    updateStats();
+                    saveState();
+                    saveToCookie();
+                    
+                    // 清空动画
+                    textEditor.classList.add('clear-animation');
+                    setTimeout(() => {
+                        textEditor.classList.remove('clear-animation');
+                    }, 500);
+                    
+                    showNotification('🗑️ 编辑器已清空', 'warning');
+                }
+            }
+        }
+
+        function copyAll() {
+            textEditor.select();
+            document.execCommand('copy');
+            textEditor.setSelectionRange(textEditor.value.length, textEditor.value.length);
+            showNotification('📋 已复制全部内容', 'success');
+        }
+
+        function selectAll() {
+            textEditor.select();
+            showNotification('🔄 已选中全部内容', 'info');
+        }
+
+        function insertTimestamp() {
+            saveState();
+            const now = new Date();
+            const timestamp = now.toLocaleString('zh-CN');
+            const cursorPos = textEditor.selectionStart;
+            const text = textEditor.value;
+            const newText = text.substring(0, cursorPos) + `[${timestamp}] ` + text.substring(cursorPos);
+            textEditor.value = newText;
+            textEditor.setSelectionRange(cursorPos + timestamp.length + 3, cursorPos + timestamp.length + 3);
+            textEditor.focus();
+            updateStats();
+            saveState();
+            saveToCookie();
+            
+            showNotification('⏰ 时间戳已插入', 'success');
+        }
+
+        function saveManually() {
+            saveToCookie();
+            showNotification('💾 手动保存成功', 'success');
+        }
+
+        function exportText() {
+            const text = textEditor.value;
+            if (text.trim() === '') {
+                showNotification('⚠️ 没有内容可导出', 'warning');
+                return;
+            }
+            
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `文本编辑器_${new Date().toLocaleDateString('zh-CN')}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showNotification('📤 文本已导出', 'success');
+        }
+
+        // 快捷键支持
+        textEditor.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 'a':
+                        e.preventDefault();
+                        selectAll();
+                        break;
+                    case 'l':
+                        e.preventDefault();
+                        clearEditor();
+                        break;
+                    case 'z':
+                        e.preventDefault();
+                        if (e.shiftKey) {
+                            redo();
+                        } else {
+                            undo();
+                        }
+                        break;
+                    case 'y':
+                        e.preventDefault();
+                        redo();
+                        break;
+                    case 's':
+                        e.preventDefault();
+                        saveManually();
+                        break;
+                    case 'o':
+                        e.preventDefault();
+                        loadFromCookie();
+                        break;
+                    case 'e':
+                        e.preventDefault();
+                        exportText();
+                        break;
+                }
+            }
+        });
+
+        // 页面卸载前保存
+        window.addEventListener('beforeunload', function(e) {
+            if (textEditor.value.trim() !== '') {
+                saveToCookie();
+            }
+        });
+
+        // 页面可见性变化时保存
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && textEditor.value.trim() !== '') {
+                saveToCookie();
+            }
+        });
+
+        // 初始化
+        function init() {
+            // 设置会话开始时间
+            sessionStart.textContent = sessionStartTime.toLocaleString('zh-CN');
+            
+            // 加载保存的数据
+            loadFromCookie();
+            
+            // 设置初始状态
+            currentState = {
+                text: textEditor.value,
+                selectionStart: 0,
+                selectionEnd: 0
+            };
+            
+            // 开始自动保存
+            startAutoSave();
+            
+            // 开始会话时间更新
+            setInterval(updateSessionTime, 1000);
+            
+            // 初始化统计
+            updateStats();
+            
+            // 聚焦到编辑器
+            textEditor.focus();
+            
+            // 显示欢迎消息
+            setTimeout(() => {
+                showNotification('🚀 增强版文本编辑器已加载完成', 'success');
+            }, 1000);
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
